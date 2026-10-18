@@ -64,6 +64,10 @@ class Browser:
             response = await self.page.goto("https://weread.qq.com/", wait_until="domcontentloaded")
             if response and response.status >= 400:
                 raise RuntimeError("官方登录页面不可访问")
+            # The header can be server-rendered before its client-side click
+            # handler is installed. Visible controls alone do not prove hydration.
+            await self.page.wait_for_load_state("load", timeout=30000)
+            await self.page.wait_for_timeout(1000)
             login = self.page.get_by_text("登录", exact=True)
             visible_login = login.filter(visible=True)
             qr = self.page.locator('img[class*="qr" i], img[src^="data:image/png"], canvas')
