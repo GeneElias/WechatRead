@@ -45,6 +45,7 @@ async def ensure_login(browser, notifier, timeout=600, poll=5):
         link, image = await qr_link(browser.page)
         if link and link != last_url and sent < 6:
             await notifier.login(link, image)
+            print("官方登录链接已发送至飞书，等待扫码确认", flush=True)
             last_url, sent = link, sent + 1
         if time.monotonic() - refreshed >= 90:
             await browser.login()

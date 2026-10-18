@@ -87,7 +87,7 @@ def load_state(cache: Path, key):
 
 
 async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser):
-    result = {"started": now(), "status": "failed", "reading": "pending_verification", "checkin": "not_configured"}
+    result = {"started": now(), "status": "failed", "phase": "configuration", "reading": "pending_verification", "checkin": "not_configured"}
     browser = None
     notifier = None
     remote = os.environ.get("WEREAD_REMOTE_LOGIN") == "true"
@@ -107,13 +107,22 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
                 raise
             state = {"cookies": [], "origins": []}
         browser = browser_factory(data_dir)
+        result["phase"] = "browser_start"
+        print("启动浏览器并恢复会话", flush=True)
         await restore(browser, state)
         if remote:
+            result["phase"] = "remote_login"
+            print("检查登录状态，必要时通过飞书请求扫码", flush=True)
             await ensure_login(browser, notifier)
+            print("登录已验证", flush=True)
             if not settings.book_url:
+                result["phase"] = "book_discovery"
                 settings = settings.model_copy(update={"book_url": await browser.discover_book()})
+        result["phase"] = "reading"
+        print("开始阅读与官方结果核验", flush=True)
         result.update(await browser.run(settings))
         result["status"] = "executed"
+        result["phase"] = "completed"
         exit_code = 0
     except LoginRequired:
         result.update(status="needs_login", message="请通过飞书中的官方链接扫码或完成登录确认；超时后重新触发任务")
@@ -151,6 +160,9 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
         summary = "\n".join([
             "## 微信读书每日任务", "",
             f"- 执行状态：{result['status']}",
+            f"- 执行阶段：{result['phase']}",
+            f"- 说明：{result.get('message', '无')}",
+            f"- 结果通知：{result.get('notification', 'not_configured')}",
             f"- 阅读核验：{labels.get(result['reading'], result['reading'])}",
             f"- 签到核验：{labels.get(result['checkin'], result['checkin'])}",
             f"- 本地运行秒数：{result.get('elapsed_seconds', 0)}",
