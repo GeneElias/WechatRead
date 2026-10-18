@@ -10,7 +10,9 @@ import httpx
 
 
 class NotificationError(Exception):
-    pass
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code if isinstance(code, int) else None
 
 
 def official_login_url(value):
@@ -47,7 +49,7 @@ class Feishu:
                 response.raise_for_status()
                 body = response.json()
                 if body.get("code", body.get("StatusCode")) != 0:
-                    raise NotificationError("飞书拒绝了通知，请检查签名、关键词与机器人配置")
+                    raise NotificationError("飞书拒绝了通知，请检查签名、关键词与机器人配置", body.get("code", body.get("StatusCode")))
         except NotificationError:
             raise
         except Exception:
