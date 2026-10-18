@@ -8,35 +8,30 @@
 
 ## GitHub Actions 部署
 
-### 1. 准备本机登录（只在首次或失效时需要）
+### 1. 连接飞书群机器人
 
-在你自己的、有桌面浏览器的电脑上检出本仓库，安装 Python 3.12+，执行：
+在你的飞书群中添加自定义机器人，在 GitHub 仓库 Settings → Secrets and variables → Actions 中配置：
 
-```bash
-python -m venv .venv
-# Windows 将后续 .venv/bin/python 替换成 .venv\Scripts\python.exe
-.venv/bin/python -m pip install -r requirements.lock.txt
-.venv/bin/python -m playwright install chromium
-.venv/bin/python -m weread.cloud login
-```
+| Secret | 用途 |
+| --- | --- |
+| `FEISHU_WEBHOOK_URL` | 必填，自定义机器人的 HTTPS Webhook 地址 |
+| `FEISHU_SIGN_SECRET` | 若开启机器人签名校验则必填，否则不填 |
 
-在打开的官方浏览器窗口中扫码，确认进入个人书架后返回终端按回车。程序会在 `.data/cloud/` 中生成 `session-key` 和 `initial-state`；两者共同用于恢复账号，均须保密，不能提交 Git 或粘贴到聊天。若此前已在本地管理页面登录，先停止管理服务，再用 `python -m weread.cloud export` 导出即可。
+如果开启关键词校验，请允许“微信读书”。机器人需要能发送消息到你可接收的群。不要把 Webhook 或签名密钥粘贴到聊天、配置文件或提交记录中。
 
-### 2. 将两项 Secrets 和书籍变量设置到仓库
+### 2. 从飞书完成远程登录
 
-使用你电脑上已登录 GitHub 的 `gh` CLI，直接从文件导入，避免将内容打印到终端：
+不需要本机安装程序或导出 Cookie。在 Actions 运行“飞书扫码实测”或“每日微信读书”。缺少有效登录态时，程序打开官方登录页、解码二维码，将**二维码中的官方登录链接**发到飞书；若官方提供可直接访问的二维码图片链接，则同时发送“打开官方二维码”按钮。不会把二维码上传到公开附件、第三方图床或二维码生成站。
 
-```bash
-gh secret set WEREAD_SESSION_KEY -R GeneElias/WechatRead < .data/cloud/session-key
-gh secret set WEREAD_INITIAL_STATE -R GeneElias/WechatRead < .data/cloud/initial-state
-gh variable set WEREAD_BOOK_URL -R GeneElias/WechatRead --body 'https://weread.qq.com/web/reader/你的书籍链接'
-```
+收到通知后，在微信中完成官方扫码或登录确认。程序最多等待十分钟，期间适时刷新并发送新的链接，最多六条；确认成功后自动保存加密会话、选书并继续阅读。若二维码只有内嵌图片而没有公开图片 URL，通知只包含解码出的官方登录链接，不声称已经上传图片。链接能否在特定手机上直接完成登录，仍需真实账号实测。
 
-也可在 GitHub 仓库 Settings → Secrets and variables → Actions 中设置同名 Secrets 和 Variables。书籍必须是该账号可以阅读的官方阅读器链接。`WEREAD_SESSION_KEY` 用于认证加密，`WEREAD_INITIAL_STATE` 是已加密的初始登录态，不是明文 Cookie。
+未指定书籍时，自动选择官方网页书架中的第一个阅读器链接；书架为空或页面没有对应链接则失败并通知。可选仓库变量 `WEREAD_BOOK_URL` 指定已有阅读权限的书籍。程序不购买书籍或报名付费活动。
+
+加密密钥默认通过 Webhook 内的高熵令牌与固定用途标识派生，不需要手动设置会话 Secrets；更换 Webhook 后会自动重新扫码。也支持可选 `WEREAD_SESSION_KEY` 指定独立 Fernet 密钥和 `WEREAD_INITIAL_STATE` 导入历史加密登录态，但新流程不要求这两项。登录态只存入加密的 Actions 缓存；缓存被淘汰或登录失效时重新通过飞书确认。
 
 ### 3. 先手动运行，再打开每日调度
 
-在仓库 Actions 中选择“每日微信读书”→ Run workflow，使用 `main` 分支。查看运行摘要与 `weread-result-…` 附件里的结果，并在官方客户端核对。运行后会加密保存刷新后的登录态，下次优先从 Actions 缓存恢复；缓存失效时回退到初始 Secret。登录过期时需重新扫码并重新导入**两项 Secrets**；每次导出都会更换加密密钥，使旧缓存失效。缓存可能被平台淘汰，不能承诺永不掉线。
+在仓库 Actions 中选择“每日微信读书”→ Run workflow，使用 `main` 分支。完成飞书扫码后，程序会将运行结果发回飞书，同时在 Actions 摘要及附件中保留结果。机器人请求失败、签名错误或关键词不匹配时，任务会明确失败，不会假装已经发出通知。
 
 确认配置和账号行为正确后，再启用定时：
 
@@ -48,7 +43,7 @@ gh variable set WEREAD_ENABLED -R GeneElias/WechatRead --body true
 
 **结果解释：** Actions 绿色只表示程序完成执行。是否计时、是否签到，应分别看摘要的“阅读核验”和“签到核验”；没有统计适配时是“待确认”，不是官方达标。工作流执行失败则显示红色。认证、配置或浏览器失败不会被当作成功。当前没有默认猜测的签到入口。
 
-GitHub 调度可能延迟，不提供严格准点或补跑保证；定时工作流仅在默认分支生效，公开仓库长期无活动时还可能被平台停用。同一仓库的账号任务串行运行，不开启 PR 触发的账号任务。结果附件保留 14 天，不含浏览器 profile、Cookie 或加密密钥。建议使用私人仓库管理个人账号任务；公开仓库中不要提交包含个人信息的配置或运行结果。
+GitHub 调度可能延迟，不提供严格准点或补跑保证；定时工作流仅在默认分支生效，公开仓库长期无活动时还可能被平台停用。同一仓库的账号任务串行运行，不开启 PR 触发的账号任务。“飞书扫码实测”在其工作流文件推送到 main 时触发一次，也支持手动触发；没有配置机器人时会在预检处停止。结果附件保留 14 天，不含二维码链接、浏览器 profile、Cookie 或加密密钥。建议使用私人仓库管理个人账号任务；公开仓库中不要提交包含个人信息的配置或运行结果。
 
 手动运行与每日运行均为独立任务，多次手动触发可能重复阅读。仅 GitHub Actions 的并发控制负责串行化，不提供跨工作流、跨仓库的账号锁。若需停用，设置 `WEREAD_ENABLED=false` 或在 Actions 中禁用工作流。
 
@@ -103,4 +98,4 @@ PLAYWRIGHT_BROWSERS_PATH="$PWD/.data/browsers" .venv/bin/python -m playwright in
 
 `.data/` 包含浏览器会话、管理口令和数据库，已被 Git 忽略。请保护整个目录。浏览器状态可能包含登录凭证；不上传公共存储。退出管理页不退出微信读书，清除本地登录态会移除浏览器 profile；撤销远程设备请在官方客户端操作。
 
-当前版本没有通知渠道、自动提取官方统计选择器或长期运行保证。健康检查 `/health` 只表示管理服务可用，不表示官网可访问。当前 Codex 环境对官网的访问尚未放通，不能作为已经验证的每日托管服务。
+当前版本支持飞书通知，但没有自动提取官方统计选择器或长期运行保证。健康检查 `/health` 只表示管理服务可用，不表示官网可访问。当前 Codex 环境对官网的访问尚未放通，不能作为已经验证的每日托管服务。

@@ -1,0 +1,14 @@
+name: 飞书扫码实测
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/feishu-login-test.yml']
+permissions:
+  contents: read
+jobs:
+  login-and-read:
+    uses: ./.github/workflows/daily-read.yml
+    with:
+      login_test: true
+    secrets: inherit

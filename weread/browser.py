@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit, unquote
+from urllib.parse import urljoin
 
 from playwright.async_api import async_playwright
 
@@ -72,6 +73,23 @@ class Browser:
         if not self.context:
             return False
         return any(c["name"] == "wr_skey" for c in await self.context.cookies("https://weread.qq.com/"))
+
+    async def authenticated(self):
+        if not await self.saved_session():
+            return False
+        try:
+            response = await self.context.request.get("https://weread.qq.com/web/shelf/sync", timeout=15000)
+            body = await response.json()
+            return response.ok and isinstance(body, dict) and not body.get("errCode") and not body.get("errcode") and ("books" in body or "bookIds" in body)
+        except Exception:
+            return False
+
+    async def discover_book(self):
+        await self.page.goto("https://weread.qq.com/web/shelf", wait_until="domcontentloaded")
+        links = self.page.locator('a[href*="/web/reader/"]')
+        await links.first.wait_for(state="attached", timeout=15000)
+        href = urljoin(self.page.url, await links.first.get_attribute("href"))
+        return Settings(book_url=href).book_url
 
     async def screenshot(self):
         if self.lock.locked():

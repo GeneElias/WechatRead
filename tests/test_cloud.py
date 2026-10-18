@@ -8,6 +8,60 @@ from weread.browser import Browser, LoginRequired
 from weread.cloud import decrypt_state, encrypt_state, load_settings, load_state, restore, run
 
 
+def test_remote_first_login_without_manual_export(tmp_path, monkeypatch, capsys):
+    import httpx
+    from weread.cloud import session_key
+    from weread.feishu import Feishu
+    from test_feishu import LINK, WEBHOOK, qr_png
+    import base64
+
+    for name in ("WEREAD_SESSION_KEY", "WEREAD_INITIAL_STATE", "WEREAD_BOOK_URL"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("FEISHU_WEBHOOK_URL", WEBHOOK)
+    monkeypatch.setenv("WEREAD_REMOTE_LOGIN", "true")
+    config = tmp_path / "config.json"
+    config.write_text("{}")
+    received, browsers = [], []
+
+    class RemoteFixture(Browser):
+        async def open(self):
+            if self.context:
+                return
+            await super().open()
+            browsers.append(self)
+            image = base64.b64encode(qr_png(LINK)).decode()
+            async def route(request):
+                body = '<a href="/web/reader/test">book</a>' if "/web/shelf" in request.request.url else f'<img class="qr" src="data:image/png;base64,{image}">'
+                await request.fulfill(content_type="text/html",body=body)
+            await self.context.route("https://weread.qq.com/**",route)
+
+        async def authenticated(self):
+            return await self.saved_session()
+
+        async def run(self, settings):
+            assert settings.book_url == "https://weread.qq.com/web/reader/test"
+            return {"reading":"pending_verification","checkin":"not_configured","elapsed_seconds":300}
+
+    async def handle(request):
+        body = json.loads(request.content)
+        received.append(body)
+        if "扫码登录" in body["card"]["header"]["title"]["content"]:
+            await browsers[-1].context.add_cookies([{"name":"wr_skey","value":"remote-fixture-private","domain":"weread.qq.com","path":"/","secure":True}])
+        return httpx.Response(200,json={"code":0})
+
+    bot = Feishu(WEBHOOK, transport=httpx.MockTransport(handle))
+    monkeypatch.setattr(Feishu,"from_environment",lambda:bot)
+    assert asyncio.run(run(config,tmp_path/"data",tmp_path/"reports",RemoteFixture)) == 0
+    assert len(received) == 2  # QR followed by execution result.
+    assert decrypt_state((tmp_path/"data/session.enc").read_text(),session_key())["cookies"]
+    assert asyncio.run(run(config,tmp_path/"data",tmp_path/"reports",RemoteFixture)) == 0
+    assert len(received) == 3  # Second run reuses login, sends only the result.
+    for file in (tmp_path/"reports").iterdir():
+        text = file.read_text()
+        assert LINK not in text and WEBHOOK not in text and "remote-fixture-private" not in text
+    assert LINK not in capsys.readouterr().out
+
+
 def test_authenticated_encryption_and_fallback(tmp_path, monkeypatch):
     key = Fernet.generate_key().decode()
     state = {"cookies": [], "origins": []}

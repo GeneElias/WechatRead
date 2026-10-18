@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: '17 1 * * *' # 北京时间 09:17，GitHub 调度可能延迟
   workflow_dispatch:
+    inputs:
+      login_test:
+        description: '测试飞书扫码登录并继续阅读'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      login_test:
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -15,13 +25,16 @@ concurrency:
 jobs:
   read:
     # 在完成首次手动验证后设置仓库变量 WEREAD_ENABLED=true。
-    if: github.event_name == 'workflow_dispatch' || vars.WEREAD_ENABLED == 'true'
+    if: inputs.login_test || github.event_name == 'workflow_dispatch' || vars.WEREAD_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 105
     env:
       WEREAD_SESSION_KEY: ${{ secrets.WEREAD_SESSION_KEY }}
       WEREAD_INITIAL_STATE: ${{ secrets.WEREAD_INITIAL_STATE }}
       WEREAD_BOOK_URL: ${{ vars.WEREAD_BOOK_URL }}
+      WEREAD_REMOTE_LOGIN: 'true'
+      FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+      FEISHU_SIGN_SECRET: ${{ secrets.FEISHU_SIGN_SECRET }}
       # 使用 Playwright 下载的配套 Chromium，忽略 runner 上可能存在的系统版本。
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.data/browsers
     steps:
@@ -37,7 +50,7 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          required = ('WEREAD_SESSION_KEY', 'WEREAD_INITIAL_STATE', 'WEREAD_BOOK_URL')
+          required = ('FEISHU_WEBHOOK_URL',)
           missing = [name for name in required if not os.environ.get(name)]
           if missing:
               raise SystemExit('缺少配置名称：' + ', '.join(missing))

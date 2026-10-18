@@ -1,6 +1,8 @@
 """One-shot GitHub Actions runner. Never writes plaintext account state to disk."""
 import argparse
 import asyncio
+import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,6 +12,8 @@ from cryptography.fernet import Fernet, InvalidToken
 from .browser import Browser, LoginRequired
 from .models import Settings
 from .store import now
+from .feishu import Feishu, NotificationError
+from .remote_login import ensure_login
 
 
 def private_write(path: Path, data: str):
@@ -49,15 +53,25 @@ async def restore(browser, state):
     })();""" % json.dumps(state).replace("<", "\\u003c"))
 
 
-def load_settings(path: Path):
+def load_settings(path: Path, allow_discovery=False):
     data = json.loads(path.read_text())
     book = os.environ.get("WEREAD_BOOK_URL", "").strip()
     if book:
         data["book_url"] = book
     settings = Settings.model_validate(data)
-    if not settings.book_url or "/web/reader/" not in settings.book_url:
+    if (not settings.book_url and not allow_discovery) or (settings.book_url and "/web/reader/" not in settings.book_url):
         raise ValueError("请设置仓库变量 WEREAD_BOOK_URL 为官方阅读器链接")
     return settings
+
+
+def session_key():
+    explicit = os.environ.get("WEREAD_SESSION_KEY", "").strip()
+    if explicit:
+        return explicit
+    webhook = os.environ.get("FEISHU_WEBHOOK_URL", "").strip()
+    # The webhook contains a high-entropy bearer token. Domain separation keeps
+    # the derived encryption key distinct from the webhook credential itself.
+    return base64.urlsafe_b64encode(hashlib.sha256(b"weread/session/v2\0" + webhook.encode()).digest()).decode() if webhook else ""
 
 
 def load_state(cache: Path, key):
@@ -75,21 +89,36 @@ def load_state(cache: Path, key):
 async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser):
     result = {"started": now(), "status": "failed", "reading": "pending_verification", "checkin": "not_configured"}
     browser = None
-    key = os.environ.get("WEREAD_SESSION_KEY", "").strip()
+    notifier = None
+    remote = os.environ.get("WEREAD_REMOTE_LOGIN") == "true"
+    key = session_key()
     cache = data_dir / "session.enc"
     exit_code = 1
     try:
+        notifier = Feishu.from_environment()
         if not key:
             raise ValueError("缺少 GitHub Secret WEREAD_SESSION_KEY")
-        settings = load_settings(settings_path)
-        state = load_state(cache, key)
+        Fernet(key)
+        settings = load_settings(settings_path, allow_discovery=remote)
+        try:
+            state = load_state(cache, key)
+        except (ValueError, InvalidToken):
+            if not remote:
+                raise
+            state = {"cookies": [], "origins": []}
         browser = browser_factory(data_dir)
         await restore(browser, state)
+        if remote:
+            await ensure_login(browser, notifier)
+            if not settings.book_url:
+                settings = settings.model_copy(update={"book_url": await browser.discover_book()})
         result.update(await browser.run(settings))
         result["status"] = "executed"
         exit_code = 0
     except LoginRequired:
-        result.update(status="needs_login", message="请在本机重新扫码，并更新加密初始登录态 Secret")
+        result.update(status="needs_login", message="请通过飞书中的官方链接扫码或完成登录确认；超时后重新触发任务")
+    except NotificationError:
+        result.update(status="notification_failed", message="飞书通知失败，请检查机器人签名、关键词和网络")
     except (ValueError, InvalidToken, TypeError):
         result["message"] = "配置或加密登录态无效；请检查书籍变量、配置文件及两项 Secrets，必要时重新导出"
     except Exception:
@@ -110,6 +139,13 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
             except Exception:
                 pass
         result["finished"] = now()
+        if notifier:
+            try:
+                await notifier.result(result)
+                result["notification"] = "sent"
+            except NotificationError:
+                result["notification"] = "failed"
+                exit_code = 1
         private_write(report_dir / "result.json", json.dumps(result, ensure_ascii=False, indent=2))
         labels = {"confirmed_by_page":"页面字段已确认", "pending_verification":"待确认", "not_configured":"未配置"}
         summary = "\n".join([
