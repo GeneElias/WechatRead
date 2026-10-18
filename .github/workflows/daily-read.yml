@@ -22,7 +22,9 @@ concurrency:
   group: weread-account
   # A replacement live test supersedes the previous waiting test. Daily jobs
   # continue to run serially without cancelling an active reading session.
-  cancel-in-progress: ${{ inputs.login_test == true }}
+  # Reusable-workflow top-level evaluation sees the caller's workflow name;
+  # its inputs are not available yet when push-triggered callers are queued.
+  cancel-in-progress: ${{ github.workflow == '飞书扫码实测' }}
 
 jobs:
   read:
