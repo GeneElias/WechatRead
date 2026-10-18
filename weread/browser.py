@@ -65,9 +65,17 @@ class Browser:
             if response and response.status >= 400:
                 raise RuntimeError("官方登录页面不可访问")
             login = self.page.get_by_text("登录", exact=True)
-            if await login.count() == 1 and await login.is_visible():
-                await login.click()
+            pages_before = set(self.context.pages)
+            for index in range(await login.count()):
+                item = login.nth(index)
+                if await item.is_visible():
+                    await item.click()
+                    break
             await self.page.wait_for_timeout(1500)
+            opened = [page for page in self.context.pages if page not in pages_before and not page.is_closed()]
+            if opened:
+                self.page = opened[-1]
+                await self.page.wait_for_load_state("domcontentloaded")
 
     async def saved_session(self):
         if not self.context:

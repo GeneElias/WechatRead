@@ -1,4 +1,5 @@
 name: 飞书与登录页诊断
+# 检查新窗口和内嵌页面，不输出二维码或页面地址中的令牌。
 on:
   workflow_dispatch:
   push:

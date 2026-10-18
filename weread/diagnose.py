@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -38,6 +39,20 @@ async def diagnose(data_dir=Path(".data/diagnose")):
                 await asyncio.sleep(2)
             result.setdefault("qr_decoded", False)
             result["images"] = await browser.page.locator("img").count()
+            result["png_images"] = await browser.page.locator('img[src^="data:image/png"]').count()
+            result["pages"] = len(browser.context.pages)
+            result["frame_hosts"] = [urlsplit(frame.url).hostname for page in browser.context.pages for frame in page.frames]
+            result["frame_images"] = [await frame.locator("img").count() for page in browser.context.pages for frame in page.frames]
+            hints = []
+            for page in browser.context.pages:
+                for frame in page.frames:
+                    # This probe never restores an account. Retain only short
+                    # visible login/error hints from the fresh public page.
+                    text = await frame.locator("body").inner_text(timeout=5000)
+                    text = re.sub(r"https?://\S+", "[url]", text)
+                    text = re.sub(r"[A-Za-z0-9_-]{24,}|\d{7,}", "[redacted]", text)
+                    hints.extend(re.findall(r"[^\n]{0,12}(?:登录|扫码|扫一扫|错误|失败|验证|频繁|限制|刷新|加载)[^\n]{0,32}", text))
+            result["login_hints"] = hints[:12]
             result["canvases"] = await browser.page.locator("canvas").count()
             for text, name in [("登录","login_labels"),("扫码","scan_labels"),("安全验证","challenge_labels")]:
                 fields = browser.page.get_by_text(text, exact=True)
@@ -49,7 +64,10 @@ async def diagnose(data_dir=Path(".data/diagnose")):
         except Exception as error:
             result.update(website_opened=False, browser_error_type=type(error).__name__)
     finally:
-        await browser.close()
+        try:
+            await browser.close()
+        except Exception:
+            result["browser_close_error"] = True
     payload = json.dumps(result,ensure_ascii=False,sort_keys=True)
     print("::notice title=飞书与官网登录诊断::"+payload,flush=True)
     if os.environ.get("GITHUB_STEP_SUMMARY"):

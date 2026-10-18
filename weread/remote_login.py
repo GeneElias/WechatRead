@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import binascii
 import io
 import time
 from urllib.parse import urljoin
@@ -18,17 +20,35 @@ def decode_qr(png):
 
 
 async def qr_link(page):
-    candidates = page.locator('img[class*="qr"], img[src*="qr"], img[alt*="二维码"], canvas')
-    for index in range(min(await candidates.count(), 10)):
-        item = candidates.nth(index)
-        if not await item.is_visible():
+    # Official login can use a popup, an iframe, or an unlabelled data-URI image.
+    # Locator queries on the original main page do not reach those documents.
+    for document in reversed(page.context.pages):
+        if document.is_closed():
             continue
-        decoded = decode_qr(await item.screenshot())
+        for frame in document.frames:
+            candidates = frame.locator('img[class*="qr" i], img[src*="qr" i], img[alt*="二维码"], img[src^="data:image/png"], canvas')
+            for index in range(min(await candidates.count(), 20)):
+                item = candidates.nth(index)
+                if not await item.is_visible():
+                    continue
+                source = await item.get_attribute("src") or ""
+                decoded = None
+                if source.startswith("data:image/png;base64,") and len(source) < 5_000_000:
+                    try:
+                        # Read the original QR pixels; an iframe can clip an
+                        # element screenshot even though the full image loaded.
+                        decoded = decode_qr(base64.b64decode(source.split(",",1)[1], validate=True))
+                    except (ValueError, binascii.Error, OSError):
+                        pass
+                if not decoded:
+                    decoded = decode_qr(await item.screenshot())
+                if decoded:
+                    src = urljoin(frame.url, source)
+                    return decoded, src if src != frame.url and official_login_url(src) else None
+        decoded = decode_qr(await document.screenshot())
         if decoded:
-            src = urljoin(page.url, await item.get_attribute("src") or "")
-            return decoded, src if src != page.url and official_login_url(src) else None
-    decoded = decode_qr(await page.screenshot())
-    return (decoded, None) if decoded else (None, None)
+            return decoded, None
+    return None, None
 
 
 async def ensure_login(browser, notifier, timeout=600, poll=5):

@@ -91,3 +91,35 @@ def test_browser_qr_notification_and_automatic_resume(tmp_path):
         finally:
             await browser.close()
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("layout", ["iframe", "popup", "inline"])
+def test_login_qr_in_nested_and_unlabelled_documents(tmp_path, layout):
+    from weread.remote_login import qr_link
+
+    async def scenario():
+        browser = Browser(tmp_path)
+        await browser.open()
+        image = base64.b64encode(qr_png(LINK)).decode()
+        qr = f'<img src="data:image/png;base64,{image}">'
+        async def route(request):
+            if request.request.url.endswith("/qr"):
+                body = qr
+            elif layout == "popup":
+                body = '<button onclick="window.open(\'/qr\',\'_blank\')">登录</button>'
+            elif layout == "iframe":
+                body = '<button onclick="this.insertAdjacentHTML(\'afterend\',\'<iframe src=/qr></iframe>\')">登录</button>'
+            else:
+                body = '<span style="display:none">登录</span><button onclick="this.nextElementSibling.hidden=false">登录</button><div hidden>'+qr+'</div>'
+            await request.fulfill(content_type="text/html; charset=utf-8",body=body)
+        await browser.context.route("https://weread.qq.com/**", route)
+        try:
+            await browser.login()
+            link, _ = await qr_link(browser.page)
+            assert link == LINK
+            if layout == "popup":
+                assert browser.page == browser.context.pages[-1]
+                assert len(browser.context.pages) == 2
+        finally:
+            await browser.close()
+    asyncio.run(scenario())
