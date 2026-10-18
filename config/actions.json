@@ -1,0 +1,11 @@
+{
+  "book_url": "",
+  "target_minutes": 5,
+  "max_minutes": 8,
+  "goal": "daily",
+  "statistics_url": "",
+  "statistics_selector": "",
+  "checkin_url": "",
+  "checkin_button": "",
+  "checkin_success": ""
+}
