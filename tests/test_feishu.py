@@ -93,7 +93,7 @@ def test_browser_qr_notification_and_automatic_resume(tmp_path):
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("layout", ["iframe", "popup", "inline"])
+@pytest.mark.parametrize("layout", ["iframe", "popup", "inline", "hydrated"])
 def test_login_qr_in_nested_and_unlabelled_documents(tmp_path, layout):
     from weread.remote_login import qr_link
 
@@ -109,6 +109,9 @@ def test_login_qr_in_nested_and_unlabelled_documents(tmp_path, layout):
                 body = '<button onclick="window.open(\'/qr\',\'_blank\')">登录</button>'
             elif layout == "iframe":
                 body = '<button onclick="this.insertAdjacentHTML(\'afterend\',\'<iframe src=/qr></iframe>\')">登录</button>'
+            elif layout == "hydrated":
+                markup = '<button onclick="this.nextElementSibling.hidden=false">登录</button><div hidden>'+qr+'</div>'
+                body = '<script>setTimeout(()=>document.body.innerHTML='+json.dumps(markup)+',300)</script>'
             else:
                 body = '<span style="display:none">登录</span><button onclick="this.nextElementSibling.hidden=false">登录</button><div hidden>'+qr+'</div>'
             await request.fulfill(content_type="text/html; charset=utf-8",body=body)

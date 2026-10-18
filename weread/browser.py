@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, unquote
 from urllib.parse import urljoin
 
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
 from .models import Settings, parse_duration
 from .store import TZ
@@ -65,9 +65,18 @@ class Browser:
             if response and response.status >= 400:
                 raise RuntimeError("官方登录页面不可访问")
             login = self.page.get_by_text("登录", exact=True)
+            visible_login = login.filter(visible=True)
+            qr = self.page.locator('img[class*="qr" i], img[src^="data:image/png"], canvas')
+            if not await qr.count():
+                try:
+                    # DOMContentLoaded precedes the site's Vue hydration.
+                    # Wait for the actionable control before deciding it is absent.
+                    await visible_login.first.wait_for(state="visible", timeout=10000)
+                except PlaywrightTimeoutError:
+                    pass
             pages_before = set(self.context.pages)
-            for index in range(await login.count()):
-                item = login.nth(index)
+            for index in range(await visible_login.count()):
+                item = visible_login.nth(index)
                 if await item.is_visible():
                     await item.click()
                     break
