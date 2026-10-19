@@ -156,6 +156,10 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
                 result["notification"] = "failed"
                 exit_code = 1
         private_write(report_dir / "result.json", json.dumps(result, ensure_ascii=False, indent=2))
+        # Public diagnostics contain statuses only; no URLs, QR payloads,
+        # credential values, book identifiers or account information.
+        diagnostic = {name: result.get(name) for name in ("status", "phase", "reading", "checkin", "notification", "elapsed_seconds")}
+        print("::notice title=微信读书执行状态::" + json.dumps(diagnostic, ensure_ascii=False), flush=True)
         labels = {"confirmed_by_page":"页面字段已确认", "pending_verification":"待确认", "not_configured":"未配置"}
         summary = "\n".join([
             "## 微信读书每日任务", "",
