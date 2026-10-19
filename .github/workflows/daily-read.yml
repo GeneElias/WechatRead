@@ -30,7 +30,7 @@ jobs:
   read:
     # 在完成首次手动验证后设置仓库变量 WEREAD_ENABLED=true。
     if: inputs.login_test || github.event_name == 'workflow_dispatch' || vars.WEREAD_ENABLED == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 105
     env:
       WEREAD_SESSION_KEY: ${{ secrets.WEREAD_SESSION_KEY }}
