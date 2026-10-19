@@ -54,6 +54,22 @@ def test_bot_signature_and_errors():
     asyncio.run(scenario())
 
 
+def test_inline_qr_is_visible_in_notification_instead_of_link_only():
+    async def scenario():
+        received = []
+        def handle(request):
+            received.append(json.loads(request.content))
+            return httpx.Response(200,json={"code":0})
+        bot = Feishu(WEBHOOK,transport=httpx.MockTransport(handle))
+        await bot.login(LINK)
+        elements = received[0]["card"]["elements"]
+        charts = [element for element in elements if element["tag"] == "chart"]
+        assert len(charts) == 1
+        assert charts[0]["chart_spec"]["data"]["values"]
+        assert len(json.dumps(received[0],separators=(",",":"),ensure_ascii=False).encode()) < 28000
+    asyncio.run(scenario())
+
+
 def test_browser_qr_notification_and_automatic_resume(tmp_path):
     async def scenario():
         browser = Browser(tmp_path)

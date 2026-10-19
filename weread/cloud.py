@@ -126,8 +126,9 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
         exit_code = 0
     except LoginRequired:
         result.update(status="needs_login", message="请通过飞书中的官方链接扫码或完成登录确认；超时后重新触发任务")
-    except NotificationError:
-        result.update(status="notification_failed", message="飞书通知失败，请检查机器人签名、关键词和网络")
+    except NotificationError as error:
+        result.update(status="notification_failed", notification_error_code=error.code,
+                      message="飞书通知失败，请检查机器人签名、关键词和网络")
     except (ValueError, InvalidToken, TypeError):
         result["message"] = "配置或加密登录态无效；请检查书籍变量、配置文件及两项 Secrets，必要时重新导出"
     except Exception:
@@ -158,7 +159,7 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
         private_write(report_dir / "result.json", json.dumps(result, ensure_ascii=False, indent=2))
         # Public diagnostics contain statuses only; no URLs, QR payloads,
         # credential values, book identifiers or account information.
-        diagnostic = {name: result.get(name) for name in ("status", "phase", "reading", "checkin", "notification", "elapsed_seconds")}
+        diagnostic = {name: result.get(name) for name in ("status", "phase", "reading", "checkin", "notification", "notification_error_code", "elapsed_seconds")}
         print("::notice title=微信读书执行状态::" + json.dumps(diagnostic, ensure_ascii=False), flush=True)
         labels = {"confirmed_by_page":"页面字段已确认", "pending_verification":"待确认", "not_configured":"未配置"}
         summary = "\n".join([

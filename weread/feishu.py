@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from .qr_card import qr_chart
+
 
 class NotificationError(Exception):
     def __init__(self, message, code=None):
@@ -61,8 +63,11 @@ class Feishu:
         elements = [{"tag":"div", "text":{"tag":"plain_text", "content":"微信读书：需要你完成一次官方扫码或登录确认。链接短时有效，程序正在等待，完成后会自动继续。请勿转发。"}}]
         if image_url:
             elements.append({"tag":"action", "actions":[{"tag":"button", "text":{"tag":"plain_text","content":"打开官方二维码"}, "url":image_url, "type":"primary"}]})
-        elements.append({"tag":"action", "actions":[{"tag":"button", "text":{"tag":"plain_text","content":"打开二维码中的官方登录链接"}, "url":login_url}]})
-        elements.append({"tag":"div", "text":{"tag":"plain_text", "content":"若链接未完成确认，请在微信中打开。只有官方页面确认登录后，程序才会继续；未发布二维码到 GitHub 或第三方图床。"}})
+        else:
+            elements.append({"tag":"div", "text":{"tag":"plain_text", "content":"请用微信扫一扫下方二维码。手机上可先放大并截图，再用微信扫一扫从相册识别。"}})
+            elements.append(qr_chart(login_url))
+        elements.append({"tag":"action", "actions":[{"tag":"button", "text":{"tag":"plain_text","content":"备用：官方登录确认链接"}, "url":login_url}]})
+        elements.append({"tag":"div", "text":{"tag":"plain_text", "content":"完成微信官方登录确认后，阅读任务将自动继续。二维码短时有效，请勿转发。"}})
         await self.send({"header":{"title":{"tag":"plain_text","content":"微信读书 · 扫码登录"},"template":"blue"}, "elements":elements})
 
     async def result(self, result):
