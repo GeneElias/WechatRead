@@ -28,8 +28,8 @@ concurrency:
 
 jobs:
   read:
-    # 在完成首次手动验证后设置仓库变量 WEREAD_ENABLED=true。
-    if: inputs.login_test || github.event_name == 'workflow_dispatch' || vars.WEREAD_ENABLED == 'true'
+    # 已授权开启每日阅读；变量未设置时默认启用，设为 false 可停用。
+    if: inputs.login_test || github.event_name == 'workflow_dispatch' || vars.WEREAD_ENABLED == 'true' || vars.WEREAD_ENABLED == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 105
     env:

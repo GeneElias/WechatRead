@@ -31,17 +31,17 @@
 
 加密密钥默认通过 Webhook 内的高熵令牌与固定用途标识派生，不需要手动设置会话 Secrets；更换 Webhook 后会自动重新扫码。也支持可选 `WEREAD_SESSION_KEY` 指定独立 Fernet 密钥和 `WEREAD_INITIAL_STATE` 导入历史加密登录态，但新流程不要求这两项。登录态只存入加密的 Actions 缓存；缓存被淘汰或登录失效时重新通过飞书确认。
 
-### 3. 先手动运行，再打开每日调度
+### 3. 每日调度与手动运行
 
 在仓库 Actions 中选择“每日微信读书”→ Run workflow，使用 `main` 分支。完成飞书扫码后，程序会将运行结果发回飞书，同时在 Actions 摘要及附件中保留结果。机器人请求失败、签名错误或关键词不匹配时，任务会明确失败，不会假装已经发出通知。
 
-确认配置和账号行为正确后，再启用定时：
+每日调度已默认开启。若之前设置过停用变量，可重新启用：
 
 ```bash
 gh variable set WEREAD_ENABLED -R GeneElias/WechatRead --body true
 ```
 
-未设置 `WEREAD_ENABLED=true` 时，定时任务跳过，手动触发仍可用。默认每天北京时间 **09:17（UTC 01:17）**，修改 `.github/workflows/daily-read.yml` 的 Cron 可调整。`config/actions.json` 设置目标时长、统计字段和签到适配；仓库变量 `WEREAD_BOOK_URL` 覆盖文件中的书籍链接。GitHub 工作流不会使用本地管理页面保存的计划，也不会托管常驻网页，GitHub Pages 无法运行本程序。
+未设置 `WEREAD_ENABLED` 或其值为 `true` 时，定时任务执行；设为 `false` 可停用，其他非空值也会跳过。手动触发仍可用。默认每天北京时间 **09:17（UTC 01:17）**，修改 `.github/workflows/daily-read.yml` 的 Cron 可调整。`config/actions.json` 设置目标时长、统计字段和签到适配；仓库变量 `WEREAD_BOOK_URL` 覆盖文件中的书籍链接。GitHub 工作流不会使用本地管理页面保存的计划，也不会托管常驻网页，GitHub Pages 无法运行本程序。
 
 **结果解释：** Actions 绿色只表示程序完成执行。是否计时、是否签到，应分别看摘要的“阅读核验”和“签到核验”；没有统计适配时是“待确认”，不是官方达标。工作流执行失败则显示红色。认证、配置或浏览器失败不会被当作成功。当前没有默认猜测的签到入口。
 

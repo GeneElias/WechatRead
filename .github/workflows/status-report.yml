@@ -20,7 +20,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
       FEISHU_SIGN_SECRET: ${{ secrets.FEISHU_SIGN_SECRET }}
-      WEREAD_ENABLED: ${{ vars.WEREAD_ENABLED }}
+      WEREAD_ENABLED: ${{ vars.WEREAD_ENABLED || 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
