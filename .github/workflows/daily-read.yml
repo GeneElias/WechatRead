@@ -5,12 +5,19 @@ on:
     - cron: '17 1 * * *' # 北京时间 09:17，GitHub 调度可能延迟
   workflow_dispatch:
     inputs:
+      inspect_features:
+        description: '只核实奖励入口和官方周统计（不阅读、不领取）'
+        type: boolean
+        default: false
       login_test:
         description: '测试飞书扫码登录并继续阅读'
         type: boolean
         default: false
   workflow_call:
     inputs:
+      inspect_features:
+        type: boolean
+        default: false
       login_test:
         type: boolean
         default: false
@@ -31,10 +38,12 @@ jobs:
     # 已授权开启每日阅读；变量未设置时默认启用，设为 false 可停用。
     if: inputs.login_test || github.event_name == 'workflow_dispatch' || vars.WEREAD_ENABLED == 'true' || vars.WEREAD_ENABLED == ''
     runs-on: ubuntu-24.04
-    timeout-minutes: 105
+    # 周六最坏补读 5 小时，另留登录、安装、每日阅读及核验时间。
+    timeout-minutes: 350
     env:
       WEREAD_SESSION_KEY: ${{ secrets.WEREAD_SESSION_KEY }}
       WEREAD_INITIAL_STATE: ${{ secrets.WEREAD_INITIAL_STATE }}
+      WEREAD_API_KEY: ${{ secrets.WEREAD_API_KEY }}
       WEREAD_BOOK_URL: ${{ vars.WEREAD_BOOK_URL }}
       WEREAD_REMOTE_LOGIN: 'true'
       FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
@@ -73,7 +82,14 @@ jobs:
           restore-keys: |
             weread-session-v1-${{ github.ref_name }}-
       - name: 执行阅读并核验结果
-        run: python -m weread.cloud run
+        env:
+          INSPECT_FEATURES: ${{ inputs.inspect_features }}
+        run: |
+          if [ "$INSPECT_FEATURES" = "true" ]; then
+            python -m weread.cloud run --inspect-features
+          else
+            python -m weread.cloud run
+          fi
       - name: 保存刷新后的加密登录态
         if: always() && !cancelled()
         uses: actions/cache/save@v4

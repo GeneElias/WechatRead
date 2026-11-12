@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from .qr_card import qr_chart
+from .feature_report import feature_lines
 
 
 class NotificationError(Exception):
@@ -76,4 +77,5 @@ class Feishu:
                 f"签到：{names.get(result['checkin'], '待确认')}\n本地运行：{result.get('elapsed_seconds', 0)} 秒\n"
                 f"阶段：{result.get('phase', 'unknown')}\n说明：{result.get('message', '无')}\n"
                 "程序完成不代表官方计时或签到达标，请以核验状态为准。")
+        text += "\n" + "\n".join(feature_lines(result))
         await self.send({"header":{"title":{"tag":"plain_text","content":"微信读书 · 执行结果"}}, "elements":[{"tag":"div","text":{"tag":"plain_text","content":text}}]})

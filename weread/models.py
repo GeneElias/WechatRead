@@ -16,6 +16,8 @@ class Settings(BaseModel):
     checkin_url: str = ""
     checkin_button: str = ""
     checkin_success: str = ""
+    rewards_enabled: bool = False
+    weekly_enabled: bool = False
 
     @field_validator("book_url", "statistics_url", "checkin_url")
     @classmethod

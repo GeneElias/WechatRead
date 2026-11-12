@@ -8,6 +8,26 @@
 
 2026-10-19 已完成[真实账号扫码与阅读实测](https://github.com/GeneElias/WechatRead/actions/runs/39187096267)：飞书卡片展示二维码，官方扫码登录后运行阅读 360 秒，12 次阅读请求均被服务器接受。[独立只读复核](https://github.com/GeneElias/WechatRead/actions/runs/39187930101)确认新的运行环境能恢复加密会话并通过登录验证。官方今日阅读时长仍未取得，签到活动尚未配置；这些结果不代表官方计时或签到已完成。
 
+## 阅读奖励与周六五小时目标
+
+2026-11-12 [官方能力实测](https://github.com/GeneElias/WechatRead/actions/runs/43167604567)确认加密会话恢复后登录有效；官方首页和书架页均未显示“我的阅读”或“阅读奖励”。**自动领取尚未完成适配**：每日会重新检查入口，并在飞书、Actions 摘要与状态日报中明确报告“未核实入口，未领取”。即使后续出现入口，也须先核实达标、免费、无需确认及领取成功的标志，再实现领取，当前不会凭“领取”二字直接点击。没有将签到配置当作奖励领取。
+
+2026-11-12 [官方周统计实测](https://github.com/GeneElias/WechatRead/actions/runs/43168205548)已返回当前自然周累计 15,122 秒（4小时12分2秒），统计周起点通过校验。本次只读查询，没有执行补时。
+
+腾讯[官方阅读统计文档](https://github.com/Tencent/WeChatReading/blob/main/skills/readdata.md)提供 `mode=weekly` 的 `totalReadTime`（秒，官方阅读/收听累计）和 `baseTime`（该周周一 00:00）。只接受当前北京时间自然周起点和有效整型秒数；不使用本地计时、请求计数或日/月统计代替。
+
+在[官方 Skills 页面](https://weread.qq.com/r/weread-skills)获取 API Key，保存到仓库 Actions Secret **`WEREAD_API_KEY`**。密钥只发送到官方 `i.weread.qq.com` 网关，不进入日志、结果附件或会话缓存。未配置时只尝试读取该账号已有的官方密钥，不生成或重置密钥；无法取得官方统计就报告原因，不盲目补读。
+
+`config/actions.json` 已开启 `weekly_enabled` 与 `rewards_enabled`；本地管理工具默认关闭这两项托管功能。沿用每天 **北京时间 09:17** 的 Cron，周六任务在每日阅读前检查官方本周累计：已满 18,000 秒则跳过补时；不足则使用正常网页阅读，每段最多 15 分钟，段后重查官方累计，达标后立即停止。之后照常执行每日阅读，再检查奖励入口。重复运行会重新查官方累计，已达标不会再次补时。
+
+周六补时预算为 320 分钟（含核验），工作流总上限 350 分钟，以覆盖从零开始的五小时缺口及安装、登录、每日阅读。统计失败、数值回退、连续三段无官方增长、到达预算或跨过北京时间当天时停止，并报告未达标/未核实；周目标未通过时任务返回失败，同时尽量保留加密会话和发送飞书结果。GitHub 调度可能延迟，不能保证精确 09:17 启动；错过周六不会在周日冒充补足周六目标。
+
+可在“每日微信读书”手动触发时勾选 `inspect_features`，只核实奖励入口和官方周统计，不执行阅读或领取：
+
+```bash
+gh workflow run daily-read.yml -R GeneElias/WechatRead --ref main -f inspect_features=true
+```
+
 ## GitHub Actions 部署
 
 ### 1. 连接飞书群机器人

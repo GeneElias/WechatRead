@@ -10,6 +10,7 @@ import zipfile
 import httpx
 
 from .feishu import Feishu
+from .feature_report import feature_lines
 
 
 BEIJING = timezone(timedelta(hours=8))
@@ -20,6 +21,7 @@ LABELS = {
     "pending": "等待中", "action_required": "需要处理", "neutral": "未产生结论",
     "confirmed_by_page": "页面字段已确认", "pending_verification": "待确认",
     "not_configured": "未配置", "executed": "已执行", "failed": "失败",
+    "partial": "部分执行，周目标未核实",
     "needs_login": "需要重新扫码", "notification_failed": "通知失败",
 }
 
@@ -117,6 +119,7 @@ def make_card(repository, snapshot, enabled, current=None):
                       f"该次阅读请求：发送 {number(counts.get('sent'))} / 接受 {number(counts.get('accepted'))} / 拒绝 {number(counts.get('rejected'))}",
                       f"该次阅读核验：{label(result.get('reading'))}",
                       f"该次签到核验：{label(result.get('checkin'))}"])
+        lines.extend(feature_lines(result))
     elif completed:
         lines.append("该次详细结果：读取失败" if snapshot["evidence_error"] else "该次详细结果：无可用附件（可能未生成或已过期）")
     lines.append("程序成功或请求被接受，不代表官方阅读时长及签到达标。本报告不执行阅读，也不验证当前登录是否有效。")

@@ -7,5 +7,7 @@
   "statistics_selector": "",
   "checkin_url": "",
   "checkin_button": "",
-  "checkin_success": ""
+  "checkin_success": "",
+  "rewards_enabled": true,
+  "weekly_enabled": true
 }

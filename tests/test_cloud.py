@@ -126,3 +126,44 @@ def test_cloud_browser_restore_and_results(tmp_path, monkeypatch):
             raise LoginRequired()
     assert asyncio.run(run(config, tmp_path / "data", tmp_path / "reports", Expired)) == 1
     assert json.loads((tmp_path / "reports/result.json").read_text())["status"] == "needs_login"
+
+
+def test_inspection_reads_statistics_without_reading_or_leaking_secrets(tmp_path, monkeypatch):
+    from weread.official import StatisticsUnavailable
+    from weread.features import OfficialStatistics
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv('WEREAD_SESSION_KEY', key)
+    monkeypatch.setenv('WEREAD_INITIAL_STATE', encrypt_state({'cookies': [], 'origins': []}, key))
+    monkeypatch.delenv('FEISHU_WEBHOOK_URL', raising=False)
+    monkeypatch.delenv('WEREAD_REMOTE_LOGIN', raising=False)
+    config = tmp_path / 'config.json'
+    config.write_text(json.dumps({'book_url': 'https://weread.qq.com/web/reader/test',
+                                 'weekly_enabled': True, 'rewards_enabled': True}))
+    class InspectionBrowser(Browser):
+        async def open(self):
+            if self.context:
+                return
+            await super().open()
+            async def route(request):
+                await request.fulfill(content_type='text/html', body='<p>fixture</p>')
+            await self.context.route('https://weread.qq.com/**', route)
+        async def run(self, settings):
+            raise AssertionError('inspection must never read')
+    async def missing_key(self):
+        raise StatisticsUnavailable('api_key_unavailable')
+    monkeypatch.setattr(OfficialStatistics, 'weekly', missing_key)
+    assert asyncio.run(run(config, tmp_path/'data', tmp_path/'reports', InspectionBrowser, inspect_only=True)) == 1
+    result = json.loads((tmp_path/'reports/result.json').read_text())
+    assert result['weekly']['reason'] == 'api_key_unavailable'
+    assert result['rewards']['claimed'] == 0
+    assert result['status'] == 'partial'
+    assert 'requests' not in result
+    async def confirmed(self):
+        return 18001
+    monkeypatch.setattr(OfficialStatistics, 'weekly', confirmed)
+    assert asyncio.run(run(config, tmp_path/'data', tmp_path/'reports', InspectionBrowser, inspect_only=True)) == 0
+    result = json.loads((tmp_path/'reports/result.json').read_text())
+    assert result['weekly']['status'] == 'observed'
+    assert result['weekly']['after_seconds'] == 18001
+    for file in (tmp_path/'reports').iterdir():
+        assert key not in file.read_text()

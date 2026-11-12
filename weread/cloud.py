@@ -14,6 +14,9 @@ from .models import Settings
 from .store import now
 from .feishu import Feishu, NotificationError
 from .remote_login import ensure_login
+from .features import check_weekly
+from .rewards import check_rewards
+from .feature_report import feature_lines
 
 
 def private_write(path: Path, data: str):
@@ -86,7 +89,7 @@ def load_state(cache: Path, key):
     return decrypt_state(initial, key)
 
 
-async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser):
+async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser, inspect_only=False):
     result = {"started": now(), "status": "failed", "phase": "configuration", "reading": "pending_verification", "checkin": "not_configured"}
     browser = None
     notifier = None
@@ -115,15 +118,25 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
             print("检查登录状态，必要时通过飞书请求扫码", flush=True)
             await ensure_login(browser, notifier)
             print("登录已验证", flush=True)
-            if not settings.book_url:
+            if not settings.book_url and not inspect_only:
                 result["phase"] = "book_discovery"
                 settings = settings.model_copy(update={"book_url": await browser.discover_book()})
-        result["phase"] = "reading"
-        print("开始阅读与官方结果核验", flush=True)
-        result.update(await browser.run(settings))
+        result["phase"] = "weekly_statistics"
+        result.update(await check_weekly(browser, settings, inspect_only=inspect_only))
+        if not inspect_only:
+            result["phase"] = "reading"
+            print("开始阅读与官方结果核验", flush=True)
+            result.update(await browser.run(settings))
+        if settings.rewards_enabled:
+            result["phase"] = "rewards"
+            result["rewards"] = await check_rewards(browser)
         result["status"] = "executed"
         result["phase"] = "completed"
         exit_code = 0
+        weekly_status = result.get("weekly", {}).get("status")
+        if weekly_status not in (None, "not_saturday", "confirmed_by_official", "observed"):
+            result["status"] = "partial"
+            exit_code = 1
     except LoginRequired:
         result.update(status="needs_login", message="请通过飞书中的官方链接扫码或完成登录确认；超时后重新触发任务")
     except NotificationError as error:
@@ -171,6 +184,7 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
             f"- 阅读核验：{labels.get(result['reading'], result['reading'])}",
             f"- 签到核验：{labels.get(result['checkin'], result['checkin'])}",
             f"- 本地运行秒数：{result.get('elapsed_seconds', 0)}",
+            *["- " + line for line in feature_lines(result)],
             "", "工作流执行成功仅表示程序完成；官方计时与签到请看上述核验结果。", "",
         ])
         private_write(report_dir / "summary.md", summary)
@@ -214,10 +228,11 @@ def main():
     parser.add_argument("--data-dir", type=Path, default=Path(".data"))
     parser.add_argument("--config", type=Path, default=Path("config/actions.json"))
     parser.add_argument("--reports", type=Path, default=Path("reports"))
+    parser.add_argument("--inspect-features", action="store_true", help="只核实奖励入口和官方周统计，不执行阅读或领取")
     args = parser.parse_args()
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(Path(".data/browsers").resolve()))
     try:
-        code = asyncio.run(run(args.config, args.data_dir / "cloud", args.reports)) if args.command == "run" else asyncio.run(export_session(args.data_dir, args.command == "login"))
+        code = asyncio.run(run(args.config, args.data_dir / "cloud", args.reports, inspect_only=args.inspect_features)) if args.command == "run" else asyncio.run(export_session(args.data_dir, args.command == "login"))
     except Exception:
         print("登录或导出失败，请检查浏览器安装、官网连接及本地服务是否占用了同一个 profile。")
         code = 1

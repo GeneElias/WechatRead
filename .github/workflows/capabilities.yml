@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/capabilities.yml']
+    paths: ['.github/workflows/capabilities.yml', 'weread/capabilities.py']
 permissions:
   contents: read
 concurrency:
