@@ -28,7 +28,7 @@ def week_start(current):
 def weekly_seconds(body, current):
     if not isinstance(body, dict):
         raise StatisticsUnavailable('invalid_response')
-    if body.get('upgrade_info'):
+    if 'upgrade_info' in body:
         raise StatisticsUnavailable('api_upgrade_required')
     if any(body.get(field) not in (None, 0) for field in ('errcode', 'errCode')):
         raise StatisticsUnavailable('api_rejected')

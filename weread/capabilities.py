@@ -24,6 +24,9 @@ async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
             for name, url in [('home', 'https://weread.qq.com/'), ('shelf', 'https://weread.qq.com/web/shelf')]:
                 await browser.page.goto(url, wait_until='load')
                 await browser.page.wait_for_timeout(1500)
+                avatar = browser.page.locator('.navBar_avatar, .wr_index_page_top_section_header_action_avatar_wrapper').filter(visible=True)
+                if await avatar.count() == 1:
+                    await avatar.hover()
                 labels = {}
                 for label in ('我的阅读', '阅读奖励', '本周阅读', '阅读时长', '本周', '领取'):
                     items = browser.page.get_by_text(label, exact=True).filter(visible=True)

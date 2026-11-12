@@ -1,6 +1,6 @@
 """Saturday Beijing catch-up, verified only by official current-week statistics."""
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 from .official import OfficialStatistics, StatisticsUnavailable
@@ -49,9 +49,12 @@ async def catch_up(browser, settings, statistics=None, clock=None, monotonic=Non
                 if not same_day():
                     result['status'] = 'day_changed'
                     break
-                seconds = min(CHUNK, TARGET - result['after_seconds'] + 60, remaining_budget)
+                current = clock().astimezone(TZ)
+                midnight = (current + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                until_midnight = (midnight - current).total_seconds()
+                seconds = min(CHUNK, TARGET - result['after_seconds'] + 60, remaining_budget, until_midnight)
                 # Bound a stalled reader as well as the nominal requested time.
-                async with asyncio.timeout(max(1, remaining_budget)):
+                async with asyncio.timeout(max(0.01, min(remaining_budget, until_midnight))):
                     reading = await browser.read(seconds)
                 result['elapsed_seconds'] += reading['elapsed_seconds']
                 for name in result['requests']:
@@ -74,5 +77,5 @@ async def catch_up(browser, settings, statistics=None, clock=None, monotonic=Non
         result.update(status='unavailable', reason=error.reason)
     except Exception:
         # Exception text may contain credential-bearing requests or page data.
-        result.update(status='unavailable', reason='weekly_execution_failed')
+        result.update(status='unavailable' if same_day() else 'day_changed', reason='weekly_execution_failed')
     return result

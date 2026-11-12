@@ -123,3 +123,13 @@ def test_github_outage_sends_failure_notice_without_leaking_exception(monkeypatc
     text = json.dumps(cards, ensure_ascii=False) + capsys.readouterr().out
     assert "查询失败" in text
     assert "fixture" not in text
+
+
+def test_feature_inspection_is_not_reported_as_daily_reading():
+    item = run(40)
+    snapshot = {'latest': item, 'completed': item, 'evidence_error': False, 'workflow_enabled': True,
+                'evidence': {'status': 'executed', 'mode': 'feature_inspection',
+                             'weekly': {'status': 'observed', 'after_seconds': 15122}}}
+    text = json.dumps(make_card('owner/repo', snapshot, True), ensure_ascii=False)
+    assert '未执行阅读或领取，不代表今日已完成阅读' in text
+    assert '4小时12分2秒' in text

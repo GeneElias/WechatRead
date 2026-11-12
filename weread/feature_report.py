@@ -29,6 +29,8 @@ REWARDS = {
 
 def feature_lines(result):
     lines = []
+    if result.get("mode") == "feature_inspection":
+        lines.append("本次为只读能力核实，未执行阅读或领取，不代表今日已完成阅读")
     weekly = result.get('weekly')
     if isinstance(weekly, dict):
         lines.append('周六补时：' + WEEKLY.get(weekly.get('status'), '未确认'))

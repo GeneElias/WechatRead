@@ -154,6 +154,7 @@ def test_inspection_reads_statistics_without_reading_or_leaking_secrets(tmp_path
     monkeypatch.setattr(OfficialStatistics, 'weekly', missing_key)
     assert asyncio.run(run(config, tmp_path/'data', tmp_path/'reports', InspectionBrowser, inspect_only=True)) == 1
     result = json.loads((tmp_path/'reports/result.json').read_text())
+    assert result['mode'] == 'feature_inspection'
     assert result['weekly']['reason'] == 'api_key_unavailable'
     assert result['rewards']['claimed'] == 0
     assert result['status'] == 'partial'

@@ -12,7 +12,7 @@
 
 2026-11-12 [官方能力实测](https://github.com/GeneElias/WechatRead/actions/runs/43167604567)确认加密会话恢复后登录有效；官方首页和书架页均未显示“我的阅读”或“阅读奖励”。**自动领取尚未完成适配**：每日会重新检查入口，并在飞书、Actions 摘要与状态日报中明确报告“未核实入口，未领取”。即使后续出现入口，也须先核实达标、免费、无需确认及领取成功的标志，再实现领取，当前不会凭“领取”二字直接点击。没有将签到配置当作奖励领取。
 
-2026-11-12 [官方周统计实测](https://github.com/GeneElias/WechatRead/actions/runs/43168205548)已返回当前自然周累计 15,122 秒（4小时12分2秒），统计周起点通过校验。本次只读查询，没有执行补时。
+2026-11-12 [官方周统计实测](https://github.com/GeneElias/WechatRead/actions/runs/43168205548)已返回当前自然周累计 15,122 秒（4小时12分2秒），统计周起点通过校验。本次只读查询，没有执行补时。[部署后的只读验收](https://github.com/GeneElias/WechatRead/actions/runs/43168566158)同样取得该官方累计值，并成功发送飞书结果和保存加密会话。
 
 腾讯[官方阅读统计文档](https://github.com/Tencent/WeChatReading/blob/main/skills/readdata.md)提供 `mode=weekly` 的 `totalReadTime`（秒，官方阅读/收听累计）和 `baseTime`（该周周一 00:00）。只接受当前北京时间自然周起点和有效整型秒数；不使用本地计时、请求计数或日/月统计代替。
 

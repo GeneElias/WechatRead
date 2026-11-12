@@ -162,3 +162,10 @@ def test_reports_use_only_fixed_status_text():
     assert '0小时2分3秒' in text
     assert '未领取' in text
     assert 'PRIVATE' not in text
+
+
+def test_weekly_does_not_request_reading_past_beijing_midnight():
+    late_saturday = datetime(2026, 11, 14, 15, 59, 30, tzinfo=timezone.utc)
+    result, reads = asyncio.run(weekly_scenario([0, 30], start=late_saturday, rollover=True))
+    assert reads == [30]
+    assert result['status'] == 'day_changed'

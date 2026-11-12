@@ -90,7 +90,7 @@ def load_state(cache: Path, key):
 
 
 async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser, inspect_only=False):
-    result = {"started": now(), "status": "failed", "phase": "configuration", "reading": "pending_verification", "checkin": "not_configured"}
+    result = {"mode": "feature_inspection" if inspect_only else "daily", "started": now(), "status": "failed", "phase": "configuration", "reading": "pending_verification", "checkin": "not_configured"}
     browser = None
     notifier = None
     remote = os.environ.get("WEREAD_REMOTE_LOGIN") == "true"
