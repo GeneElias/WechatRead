@@ -1,10 +1,13 @@
 """Read-only capability discovery. Never export DOM, URLs, cookies or API keys."""
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from .browser import Browser
-from .cloud import load_state, restore, session_key, private_write
+from .cloud import load_state, restore, session_key, private_write, encrypt_state
+from .feishu import Feishu
+from .remote_login import ensure_login
 
 
 async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
@@ -12,6 +15,10 @@ async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
     browser = Browser(data_dir)
     try:
         await restore(browser, load_state(data_dir / 'session.enc', session_key()))
+        await browser.page.goto('https://weread.qq.com/web/shelf', wait_until='load')
+        result['cookie_present'] = await browser.saved_session()
+        if os.environ.get('WEREAD_REMOTE_LOGIN') == 'true':
+            await ensure_login(browser, Feishu.from_environment())
         result['authenticated'] = await browser.authenticated()
         if result['authenticated']:
             for name, url in [('home', 'https://weread.qq.com/'), ('shelf', 'https://weread.qq.com/web/shelf')]:
@@ -40,6 +47,8 @@ async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
     except Exception as error:
         result['error_type'] = type(error).__name__
     finally:
+        if result['authenticated']:
+            private_write(data_dir / 'session.enc', encrypt_state(await browser.context.storage_state(), session_key()))
         await browser.close()
     private_write(reports / 'capabilities.json', json.dumps(result, ensure_ascii=False, indent=2))
     print(json.dumps(result, ensure_ascii=False))

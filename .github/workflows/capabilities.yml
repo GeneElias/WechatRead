@@ -12,8 +12,10 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
+      WEREAD_REMOTE_LOGIN: 'true'
+      FEISHU_SIGN_SECRET: ${{ secrets.FEISHU_SIGN_SECRET }}
       FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
       WEREAD_SESSION_KEY: ${{ secrets.WEREAD_SESSION_KEY }}
       WEREAD_INITIAL_STATE: ${{ secrets.WEREAD_INITIAL_STATE }}
@@ -38,6 +40,11 @@ jobs:
           restore-keys: |
             weread-session-v1-main-
       - run: python -m weread.capabilities
+      - uses: actions/cache/save@v4
+        if: always() && !cancelled()
+        with:
+          path: .data/cloud/session.enc
+          key: weread-session-v1-main-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
