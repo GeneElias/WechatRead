@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
+      WEREAD_API_KEY: ${{ secrets.WEREAD_API_KEY }}
       WEREAD_REMOTE_LOGIN: 'true'
       FEISHU_SIGN_SECRET: ${{ secrets.FEISHU_SIGN_SECRET }}
       FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}

@@ -34,13 +34,15 @@ async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
             if response.ok:
                 body = await response.json()
                 result['key_lookup_fields'] = sorted(body) if isinstance(body, dict) else []
-                key = body.get('apikey') if isinstance(body, dict) else None
+                key = os.environ.get('WEREAD_API_KEY', '').strip() or (body.get('apikey') if isinstance(body, dict) else None)
                 result['api_key_available'] = isinstance(key, str) and key.startswith('wrk-')
                 if result['api_key_available']:
                     response = await browser.context.request.post('https://i.weread.qq.com/api/agent/gateway', headers={'Authorization': 'Bearer ' + key}, data={'api_name': '/readdata/detail', 'mode': 'weekly', 'baseTime': 0, 'skill_version': '1.0.5'})
                     result['statistics_status'] = response.status
                     body = await response.json()
                     result['statistics_fields'] = sorted(body) if isinstance(body, dict) else []
+                    if isinstance(body.get('data'), dict):
+                        result['statistics_data_fields'] = sorted(body['data'])
                     for field in ('baseTime', 'totalReadTime', 'errcode'):
                         if type(body.get(field)) is int:
                             result[field] = body[field]
