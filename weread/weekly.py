@@ -11,14 +11,19 @@ BUDGET = 320 * 60
 CHUNK = 15 * 60
 
 
-async def catch_up(browser, settings, statistics=None, clock=None, monotonic=None, sleep=asyncio.sleep):
+async def catch_up(browser, settings, statistics=None, clock=None, monotonic=None, sleep=asyncio.sleep,
+                   sunday_date=None):
     clock = clock or (lambda: datetime.now(TZ))
     monotonic = monotonic or time.monotonic
     started = clock().astimezone(TZ)
     result = {'status': 'not_saturday', 'target_seconds': TARGET, 'before_seconds': None,
               'after_seconds': None, 'elapsed_seconds': 0,
               'requests': {'sent': 0, 'accepted': 0, 'rejected': 0}}
-    if started.weekday() != 5:
+    if sunday_date is not None:
+        if started.weekday() != 6 or started.date() != sunday_date:
+            result['status'] = 'manual_date_mismatch'
+            return result
+    elif started.weekday() != 5:
         return result
     statistics = statistics or OfficialStatistics(browser)
     began = monotonic()
@@ -31,6 +36,7 @@ async def catch_up(browser, settings, statistics=None, clock=None, monotonic=Non
         async with browser.lock:
             before = await statistics.weekly()
             result.update(before_seconds=before, after_seconds=before)
+            book_url = settings.book_url
             stalled = 0
             while True:
                 if not same_day():
@@ -43,7 +49,12 @@ async def catch_up(browser, settings, statistics=None, clock=None, monotonic=Non
                 if remaining_budget <= 0:
                     result['status'] = 'budget_exhausted'
                     break
-                response = await browser.page.goto(settings.book_url, wait_until='domcontentloaded')
+                if not book_url:
+                    book_url = await browser.discover_book()
+                    if not same_day():
+                        result['status'] = 'day_changed'
+                        break
+                response = await browser.page.goto(book_url, wait_until='domcontentloaded')
                 if (response and response.status >= 400) or '/web/reader/' not in browser.page.url:
                     raise StatisticsUnavailable('reader_unavailable')
                 if not same_day():

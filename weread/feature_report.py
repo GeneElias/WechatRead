@@ -1,6 +1,8 @@
 """Fixed, credential-free wording shared by Actions and Feishu reports."""
 WEEKLY = {
     'not_saturday': '非北京时间周六，未执行补时',
+    'manual_date_mismatch': '运行日与指定的北京时间周日日期不符，未执行补时',
+    'disabled': '周目标未启用',
     'observed': '只读取得官方本周统计，未执行补时',
     'confirmed_by_official': '官方本周累计已达 5 小时',
     'unavailable': '无法取得或核实官方本周统计，未确认达标',
@@ -33,7 +35,8 @@ def feature_lines(result):
         lines.append("本次为只读能力核实，未执行阅读或领取，不代表今日已完成阅读")
     weekly = result.get('weekly')
     if isinstance(weekly, dict):
-        lines.append('周六补时：' + WEEKLY.get(weekly.get('status'), '未确认'))
+        label = '周日手动补跑' if result.get('mode') == 'weekly_makeup' else '周六补时'
+        lines.append(label + '：' + WEEKLY.get(weekly.get('status'), '未确认'))
         for field, label in [('before_seconds', '补时前'), ('after_seconds', '最新')]:
             value = weekly.get(field)
             if type(value) is int and value >= 0:

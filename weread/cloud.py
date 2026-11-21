@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import base64
+from datetime import date
 import hashlib
 import json
 import os
@@ -89,8 +90,12 @@ def load_state(cache: Path, key):
     return decrypt_state(initial, key)
 
 
-async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser, inspect_only=False):
-    result = {"mode": "feature_inspection" if inspect_only else "daily", "started": now(), "status": "failed", "phase": "configuration", "reading": "pending_verification", "checkin": "not_configured"}
+async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_factory=Browser,
+              inspect_only=False, sunday_date=None):
+    if inspect_only and sunday_date is not None:
+        raise ValueError("只读核实与周日补跑不能同时使用")
+    mode = "feature_inspection" if inspect_only else "weekly_makeup" if sunday_date is not None else "daily"
+    result = {"mode": mode, "started": now(), "status": "failed", "phase": "configuration", "reading": "pending_verification", "checkin": "not_configured"}
     browser = None
     notifier = None
     remote = os.environ.get("WEREAD_REMOTE_LOGIN") == "true"
@@ -118,16 +123,16 @@ async def run(settings_path: Path, data_dir: Path, report_dir: Path, browser_fac
             print("检查登录状态，必要时通过飞书请求扫码", flush=True)
             await ensure_login(browser, notifier)
             print("登录已验证", flush=True)
-            if not settings.book_url and not inspect_only:
+            if not settings.book_url and mode == "daily":
                 result["phase"] = "book_discovery"
                 settings = settings.model_copy(update={"book_url": await browser.discover_book()})
         result["phase"] = "weekly_statistics"
-        result.update(await check_weekly(browser, settings, inspect_only=inspect_only))
-        if not inspect_only:
+        result.update(await check_weekly(browser, settings, inspect_only=inspect_only, sunday_date=sunday_date))
+        if mode == "daily":
             result["phase"] = "reading"
             print("开始阅读与官方结果核验", flush=True)
             result.update(await browser.run(settings))
-        if settings.rewards_enabled:
+        if settings.rewards_enabled and mode != "weekly_makeup":
             result["phase"] = "rewards"
             result["rewards"] = await check_rewards(browser)
         result["status"] = "executed"
@@ -228,11 +233,14 @@ def main():
     parser.add_argument("--data-dir", type=Path, default=Path(".data"))
     parser.add_argument("--config", type=Path, default=Path("config/actions.json"))
     parser.add_argument("--reports", type=Path, default=Path("reports"))
-    parser.add_argument("--inspect-features", action="store_true", help="只核实奖励入口和官方周统计，不执行阅读或领取")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--inspect-features", action="store_true", help="只核实奖励入口和官方周统计，不执行阅读或领取")
+    modes.add_argument("--sunday-catch-up-date", type=date.fromisoformat, help="指定北京时间周日日期，仅补跑本周目标")
     args = parser.parse_args()
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(Path(".data/browsers").resolve()))
     try:
-        code = asyncio.run(run(args.config, args.data_dir / "cloud", args.reports, inspect_only=args.inspect_features)) if args.command == "run" else asyncio.run(export_session(args.data_dir, args.command == "login"))
+        code = asyncio.run(run(args.config, args.data_dir / "cloud", args.reports,
+                               inspect_only=args.inspect_features, sunday_date=args.sunday_catch_up_date)) if args.command == "run" else asyncio.run(export_session(args.data_dir, args.command == "login"))
     except Exception:
         print("登录或导出失败，请检查浏览器安装、官网连接及本地服务是否占用了同一个 profile。")
         code = 1

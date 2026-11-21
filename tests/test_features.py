@@ -86,7 +86,7 @@ class Stats:
         return value
 
 
-async def weekly_scenario(values, start=SATURDAY, rollover=False, slow=False):
+async def weekly_scenario(values, start=SATURDAY, rollover=False, slow=False, sunday_date=None):
     state = {'time': 0, 'date': start, 'reads': []}
     class Page:
         url = 'https://weread.qq.com/web/reader/test'
@@ -105,7 +105,8 @@ async def weekly_scenario(values, start=SATURDAY, rollover=False, slow=False):
     async def sleep(seconds):
         state['time'] += seconds
     result = await catch_up(Browser(), Settings(book_url=Page.url), Stats(values),
-                            clock=lambda: state['date'], monotonic=lambda: state['time'], sleep=sleep)
+                            clock=lambda: state['date'], monotonic=lambda: state['time'], sleep=sleep,
+                            sunday_date=sunday_date)
     return result, state['reads']
 
 
@@ -178,3 +179,13 @@ def test_weekly_does_not_request_reading_past_beijing_midnight():
     result, reads = asyncio.run(weekly_scenario([0, 30], start=late_saturday, rollover=True))
     assert reads == [30]
     assert result['status'] == 'day_changed'
+
+
+def test_manual_makeup_is_limited_to_the_requested_sunday():
+    sunday = SATURDAY + timedelta(days=1)
+    result, reads = asyncio.run(weekly_scenario([TARGET-60, TARGET], start=sunday, sunday_date=sunday.date()))
+    assert result['status'] == 'confirmed_by_official'
+    assert reads == [120]
+    result, reads = asyncio.run(weekly_scenario([], start=sunday + timedelta(days=7), sunday_date=sunday.date()))
+    assert result['status'] == 'manual_date_mismatch'
+    assert reads == []

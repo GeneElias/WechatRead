@@ -13,6 +13,9 @@ on:
         description: '测试飞书扫码登录并继续阅读'
         type: boolean
         default: false
+      sunday_catch_up_date:
+        description: '仅补跑本周五小时目标，填写北京时间周日日期 YYYY-MM-DD'
+        type: string
   workflow_call:
     inputs:
       inspect_features:
@@ -84,12 +87,16 @@ jobs:
       - name: 执行阅读并核验结果
         env:
           INSPECT_FEATURES: ${{ inputs.inspect_features }}
+          SUNDAY_CATCH_UP_DATE: ${{ inputs.sunday_catch_up_date }}
         run: |
+          args=()
           if [ "$INSPECT_FEATURES" = "true" ]; then
-            python -m weread.cloud run --inspect-features
-          else
-            python -m weread.cloud run
+            args+=(--inspect-features)
           fi
+          if [ -n "$SUNDAY_CATCH_UP_DATE" ]; then
+            args+=("--sunday-catch-up-date=$SUNDAY_CATCH_UP_DATE")
+          fi
+          python -m weread.cloud run "${args[@]}"
       - name: 保存刷新后的加密登录态
         if: always() && !cancelled()
         uses: actions/cache/save@v4
