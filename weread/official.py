@@ -11,7 +11,7 @@ import httpx
 from .store import TZ
 
 GATEWAY = 'https://i.weread.qq.com/api/agent/gateway'
-SKILL_VERSION = '1.0.5'
+SKILL_VERSION = '1.0.6'
 
 
 class StatisticsUnavailable(Exception):
@@ -28,8 +28,8 @@ def week_start(current):
 def weekly_seconds(body, current):
     if not isinstance(body, dict):
         raise StatisticsUnavailable('invalid_response')
-    if 'upgrade_info' in body:
-        raise StatisticsUnavailable('api_upgrade_required')
+    # Official 1.0.6 contract: upgrade_info is advisory; validate the business
+    # fields in this same response rather than blocking or retrying the call.
     if any(body.get(field) not in (None, 0) for field in ('errcode', 'errCode')):
         raise StatisticsUnavailable('api_rejected')
     # Reject absent, stale, daily/monthly, string, bool and negative values.

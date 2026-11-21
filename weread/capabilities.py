@@ -8,6 +8,7 @@ from .browser import Browser
 from .cloud import load_state, restore, session_key, private_write, encrypt_state
 from .feishu import Feishu
 from .remote_login import ensure_login
+from .official import SKILL_VERSION
 
 
 async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
@@ -43,7 +44,7 @@ async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
                 key = os.environ.get('WEREAD_API_KEY', '').strip() or (body.get('apikey') if isinstance(body, dict) else None)
                 result['api_key_available'] = isinstance(key, str) and key.startswith('wrk-')
                 if result['api_key_available']:
-                    response = await browser.context.request.post('https://i.weread.qq.com/api/agent/gateway', headers={'Authorization': 'Bearer ' + key}, data={'api_name': '/readdata/detail', 'mode': 'weekly', 'baseTime': 0, 'skill_version': '1.0.5'})
+                    response = await browser.context.request.post('https://i.weread.qq.com/api/agent/gateway', headers={'Authorization': 'Bearer ' + key}, data={'api_name': '/readdata/detail', 'mode': 'weekly', 'baseTime': 0, 'skill_version': SKILL_VERSION})
                     result['statistics_status'] = response.status
                     body = await response.json()
                     result['statistics_fields'] = sorted(body) if isinstance(body, dict) else []
@@ -52,7 +53,7 @@ async def probe(data_dir=Path('.data/cloud'), reports=Path('reports')):
                     for field in ('baseTime', 'totalReadTime', 'errcode'):
                         if type(body.get(field)) is int:
                             result[field] = body[field]
-                    response = await browser.context.request.post('https://i.weread.qq.com/api/agent/gateway', headers={'Authorization': 'Bearer ' + key}, data={'api_name': '/_list', 'skill_version': '1.0.5'})
+                    response = await browser.context.request.post('https://i.weread.qq.com/api/agent/gateway', headers={'Authorization': 'Bearer ' + key}, data={'api_name': '/_list', 'skill_version': SKILL_VERSION})
                     if response.ok:
                         catalog = await response.json()
                         def api_paths(value):

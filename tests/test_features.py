@@ -20,10 +20,18 @@ def test_official_week_contract_and_units():
     for body in [None, {}, {'baseTime': base-604800, 'totalReadTime': 18000},
                  {'baseTime': base, 'totalReadTime': True}, {'baseTime': base, 'totalReadTime': '18000'},
                  {'baseTime': base, 'totalReadTime': -1}, {'baseTime': base, 'totalReadTime': 604801},
-                 {'baseTime': base, 'totalReadTime': 18000, 'errcode': -1},
-                 {'baseTime': base, 'totalReadTime': 18000, 'upgrade_info': {'message': 'upgrade'}}]:
+                 {'baseTime': base, 'totalReadTime': 18000, 'errcode': -1}]:
         with pytest.raises(StatisticsUnavailable):
             weekly_seconds(body, SATURDAY)
+
+
+def test_upgrade_notice_does_not_invalidate_verified_business_data():
+    body = {'baseTime': week_start(SATURDAY), 'totalReadTime': 18000,
+            'upgrade_info': {'message': 'private-upgrade-fixture'}}
+    assert weekly_seconds(body, SATURDAY) == 18000
+    for invalid in ({'errcode': -1}, {'baseTime': 0}, {'totalReadTime': '18000'}):
+        with pytest.raises(StatisticsUnavailable):
+            weekly_seconds(body | invalid, SATURDAY)
 
 
 def test_gateway_auth_parameters_and_error_redaction(monkeypatch):
@@ -35,8 +43,9 @@ def test_gateway_auth_parameters_and_error_redaction(monkeypatch):
             assert str(request.url) == 'https://i.weread.qq.com/api/agent/gateway'
             assert request.headers['Authorization'] == 'Bearer ' + secret
             payload = json.loads(request.content)
-            assert payload == {'api_name': '/readdata/detail', 'mode': 'weekly', 'baseTime': 0, 'skill_version': '1.0.5'}
-            return httpx.Response(200, json={'baseTime': week_start(SATURDAY), 'totalReadTime': 123})
+            assert payload == {'api_name': '/readdata/detail', 'mode': 'weekly', 'baseTime': 0, 'skill_version': '1.0.6'}
+            return httpx.Response(200, json={'baseTime': week_start(SATURDAY), 'totalReadTime': 123,
+                                           'upgrade_info': {'message': secret}})
         statistics = OfficialStatistics(None, transport=httpx.MockTransport(handle))
         assert await statistics.weekly(SATURDAY) == 123
         async def fail(request):
